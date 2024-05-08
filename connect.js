@@ -59,7 +59,7 @@ const getDatasetFromLocation = async (location) => {
     const promises = queries.map(query => {
         const url = `${baseUrl}/chat/completions/`;
         const requestBody = {
-            // provider: 'OpenaiChat',
+            provider: 'OpenaiChat',
             model: 'gpt-3.5-turbo',
             messages: [{role: 'user', content: query}]
         };
@@ -71,7 +71,6 @@ const getDatasetFromLocation = async (location) => {
     const responses = await Promise.all(promises);
     console.debug(responses);
 
-    // Fix JSON; sometimes ChatGPT won't produce the right results
     return responses;
 }
 

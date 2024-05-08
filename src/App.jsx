@@ -8,12 +8,13 @@ export default function App() {
   useEffect(() => {
     const socket = io();
 
-    socket.on('send data', data => { console.log(data); setData(data); });
+    socket.on('send data', setData);
   }, []);
 
   return (
     <div className="App">
       <div>
+          {console.log(data)}
           {data.map(result => (<ReactMarkdown source={result} />))}
       </div>
     </div>
