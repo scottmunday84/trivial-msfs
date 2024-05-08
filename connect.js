@@ -30,6 +30,10 @@ const getLocationFromGeolocation = async (api) => {
                 }
             });
 
+            if (city === undefined) {
+                throw new Error();
+            }
+
             return [city, state, country].join(', ');
         } catch (exception) {
             await new Promise(resolve => setTimeout(resolve, 15000));
@@ -41,37 +45,35 @@ const getDatasetFromLocation = async (location) => {
         'geography', 'historical events', 'science', 'art', 'authors', 'musicians', 'games', 'sports', 'leisure',
         'famous buildings', 'celebrities', 'pop culture', 'interesting facts'];
     const queries = [
-        `Get the city's name, state or province, township, and country from ${location}.`,
-        `Get statistics on the city ${location} as one would find in the CIA's World Factbook. Get population, life 
-        expectancy, access of Internet, literacy rate, GDP, ethnic groups, religions, languages,  imports, and exports. 
-        Population and GDP should include units. For ethnic groups, religions, languages, imports, and exports, also 
-        provide a percentage. Every percentage in statistics should be a decimal value no greater than 1.`,
-        `Get heads of government for the city, county prosecutor, state or province, and country with their political 
-        party affiliation of ${location}.`,
-        `Write a detailed summary description of this city at ${location}.`,
-        ...categories.map(category => `Find three to five facts of the city ${location} in ${category}. Write 
-        descriptions per entry as an essay. Do not write duplicates. Be as descriptive and specific as possible. Add 
-        proper names, dates, locations, and other identifiable information to each description. Develop an accurate 
-        title to each description using only proper names, dates, and locations.`)];
+        `Get the approximate city's name, state or province, township, and country at city at ${location}.`,
+        `Get statistics at city of ${location} as one would find in the CIA's World Factbook. Get population, life ` +
+        `expectancy, access of Internet, literacy rate, GDP, ethnic groups, religions, languages,  imports, and ` +
+        `exports. Population and GDP should include units. For ethnic groups, religions, languages, imports, and ` +
+        `exports, also provide a percentage. Every percentage in statistics should be a decimal value no greater ` +
+        `than 1.`,
+        `Get heads of government for the city, county prosecutor, state or province, and country with their ` +
+        `political party affiliation of city at ${location}.`,
+        `Write a detailed summary description of city at ${location}.`,
+        ...categories.map(category => `Find two to three facts of city at ${location} in ${category}. ` +
+        `Write descriptions per entry as an essay. Do not write duplicates. Be as descriptive and specific as ` +
+        `possible. Add proper names, dates, locations, and other identifiable information to each description. ` +
+        `Develop an accurate title to each description using only proper names, dates, and locations.`)];
     console.debug(queries);
 
     // Run each query one at a time
-    const promises = queries.map(query => {
-        const url = `${baseUrl}/chat/completions/`;
-        const requestBody = {
-            provider: 'OpenaiChat',
-            model: 'gpt-3.5-turbo',
-            messages: [{role: 'user', content: query}]
-        };
+    const url = `${baseUrl}/chat/completions/`;
+    const requestBody = {
+        provider: 'OpenaiChat',
+        model: 'gpt-3.5-turbo',
+        messages: [{role: 'user', content: queries.join(' ')}]
+    };
 
-        return axios.post(url, requestBody)
-            .then(response => response.data.choices?.[0]?.message?.content ?? '')
-            .catch(console.error);
-    })
-    const responses = await Promise.all(promises);
-    console.debug(responses);
+    const response = await axios.post(url, requestBody)
+        .then(response => response.data.choices?.[0]?.message?.content ?? '')
+        .catch(exception => console.error(exception.message));
+    console.debug(response);
 
-    return responses;
+    return response;
 }
 
 const onConnect = (socket, api) => {
@@ -87,13 +89,13 @@ const onConnect = (socket, api) => {
             console.log(`Searching for dataset on ${location}.`);
             const dataset = await getDatasetFromLocation(location);
 
-            socket.broadcast.emit('send data', dataset);
+            socket.emit('send data', dataset);
         } catch (exception) {
-            console.error(exception);
-        }
-
-        if (isLive) {
-            setTimeout(refreshGeolocationDataset, 60000);
+            console.error(exception.message);
+        } finally {
+            if (isLive) {
+                setTimeout(refreshGeolocationDataset, 60000);
+            }
         }
     }
     refreshGeolocationDataset().then();

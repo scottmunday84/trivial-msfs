@@ -1,22 +1,23 @@
-import './App.css';
-import {useEffect, useState} from "react";
+import {useState} from "react";
 import ReactMarkdown from "react-markdown";
 import {io} from "socket.io-client";
 
-export default function App() {
+const App = () => {
   const [data, setData] = useState([]);
-  useEffect(() => {
-    const socket = io();
+  const socket = io();
 
-    socket.on('send data', setData);
-  }, []);
+  socket.on('send data', data => {
+      console.log(data);
+      setData(data);
+  });
 
   return (
     <div className="App">
       <div>
-          {console.log(data)}
-          {data.map(result => (<ReactMarkdown source={result} />))}
+          {data.map(input => (<ReactMarkdown>{input}</ReactMarkdown>))}
       </div>
     </div>
   );
 }
+
+export default App;
