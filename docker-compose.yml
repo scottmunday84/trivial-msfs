@@ -1,0 +1,7 @@
+services:
+  gpt4free:
+    image: hlohaus789/g4f
+    ports:
+      - 8080:8080
+      - 1337:1337
+      - 7900:7900
