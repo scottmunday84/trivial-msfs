@@ -93,7 +93,7 @@ const App = (callback, deps) => {
                     </Box>
                     <Grow in={connected === CONNECTION_CONNECTED && isReading} timeout={3000}>
                         <Box sx={{padding: '5px'}}>
-                            <Switch onChange={doneReading} defaultChecked label="Reading" />
+                            <Switch onChange={doneReading} checked label="Reading" />
                         </Box>
                     </Grow>
                 </BottomNavigation>
