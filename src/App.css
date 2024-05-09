@@ -1,0 +1,33 @@
+/* For WebKit browsers (Chrome, Safari, etc.) */
+::-webkit-scrollbar {
+    width: 10px; /* Width of the scrollbar */
+}
+
+::-webkit-scrollbar-track {
+    background: #424242; /* Track color */
+}
+
+::-webkit-scrollbar-thumb {
+    background: #757575; /* Thumb color */
+    border-radius: 5px; /* Rounded corners */
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: #616161; /* Thumb color on hover */
+}
+
+/* For Firefox */
+* {
+    scrollbar-width: thin;
+    scrollbar-color: #757575 #424242;
+}
+
+/* For Edge */
+* {
+    scrollbar-width: thin;
+}
+
+/* For Internet Explorer */
+* {
+    scrollbar-base-color: #424242;
+}

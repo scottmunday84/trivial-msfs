@@ -11,8 +11,11 @@ const geoUrl = 'https://us1.locationiq.com/v1';
 // OpenAI (free) setup
 const baseUrl = 'http://localhost:1337/v1';
 
+// Run the MSFS API
+const api = new MSFS_API();
+
 // Setting up functions used to perform actions
-const getLocationFromGeolocation = async (api) => {
+const getLocationFromGeolocation = async () => {
     const radiansToDegrees = radians => radians * (180 / Math.PI);
 
     while (true) {
@@ -40,56 +43,66 @@ const getLocationFromGeolocation = async (api) => {
         }
     }
 }
-const getDatasetFromLocation = async (location) => {
+const getDataFromLocation = async (location) => {
     const categories = [
         'geography', 'historical events', 'science', 'art', 'authors', 'musicians', 'games', 'sports', 'leisure',
         'famous buildings', 'celebrities', 'pop culture', 'interesting facts'];
     const queries = [
-        `Get the approximate city's name, state or province, township, and country at city at ${location}.`,
-        `Get statistics at city of ${location} as one would find in the CIA's World Factbook. Get population, life ` +
-        `expectancy, access of Internet, literacy rate, GDP, ethnic groups, religions, languages,  imports, and ` +
-        `exports. Population and GDP should include units. For ethnic groups, religions, languages, imports, and ` +
-        `exports, also provide a percentage. Every percentage in statistics should be a decimal value no greater ` +
-        `than 1.`,
-        `Get heads of government for the city, county prosecutor, state or province, and country with their ` +
-        `political party affiliation of city at ${location}.`,
-        `Write a detailed summary description of city at ${location}.`,
-        ...categories.map(category => `Find two to three facts of city at ${location} in ${category}. ` +
+        `Get the approximate city's name, state or province, township, and country of the city at ${location}.`,
+        `Write a detailed summary description of the city at ${location}. Provide as Markdown.`,
+        `Get statistics of the city at ${location}. Get population, life expectancy, access of Internet, literacy rate, ` +
+        `GDP, ethnic groups, religions, languages,  imports, and exports. Population and GDP should include units. `  +
+        `For ethnic groups, religions, languages, imports, and exports, also provide a percentage. Provide as Markdown.`,
+        ...categories.map(category => `Find one to three facts of the city at ${location} in ${category}. ` +
         `Write descriptions per entry as an essay. Do not write duplicates. Be as descriptive and specific as ` +
-        `possible. Add proper names, dates, locations, and other identifiable information to each description. ` +
-        `Develop an accurate title to each description using only proper names, dates, and locations.`)];
+        `possible. No generalities. Add proper names, dates, locations, and other identifiable information to each ` +
+        `description in an essay format. Develop an accurate title to each description using only proper names, ` +
+        `dates, and locations. Provide as Markdown.`)];
     console.debug(queries);
 
     // Run each query one at a time
-    const url = `${baseUrl}/chat/completions/`;
-    const requestBody = {
-        provider: 'OpenaiChat',
-        model: 'gpt-3.5-turbo',
-        messages: [{role: 'user', content: queries.join(' ')}]
-    };
+    const responses = await Promise.all(queries.map(query => {
+        const url = `${baseUrl}/chat/completions/`;
+        const requestBody = {
+            provider: 'OpenaiChat',
+            model: 'gpt-3.5-turbo',
+            messages: [{role: 'user', content: query}]
+        };
 
-    const response = await axios.post(url, requestBody)
-        .then(response => response.data.choices?.[0]?.message?.content ?? '')
-        .catch(exception => console.error(exception.message));
-    console.debug(response);
+        return axios.post(url, requestBody)
+            .then(response => response.data.choices?.[0]?.message?.content ?? '')
+            .catch(exception => console.error(exception.message));
+    }));
+    console.debug(responses);
 
-    return response;
+    return responses;
 }
 
-const onConnect = (socket, api) => {
+const onConnect = socket => {
+    let isReading = false;
     let isLive = true;
     console.log('Connected to MSFS SimConnect server.');
 
+    // Handle reading toggle
+    socket.on('done reading', () => isReading = false);
+
     const refreshGeolocationDataset = async () => {
+        if (isReading) {
+            setTimeout(refreshGeolocationDataset, 5000);  // Let me read!!
+
+            return;
+        }
+
         try {
-            const location = await getLocationFromGeolocation(api);
+            const location = await getLocationFromGeolocation();
             console.debug(location);
 
             // Get dataset by location
             console.log(`Searching for dataset on ${location}.`);
-            const dataset = await getDatasetFromLocation(location);
+            const data = await getDataFromLocation(location);
 
-            socket.emit('send data', dataset);
+            socket.emit('send data', data);
+            isReading = true;
         } catch (exception) {
             console.error(exception.message);
         } finally {
@@ -115,16 +128,13 @@ const io = new Server(server);
 app.use(express.static('build'));
 
 io.on('connection', async (socket) => {
-    console.log('A flyer connected.');
-
-    // Run the API
-    const api = new MSFS_API();
+    console.log('A flyer connected. Zoom, zoom!!');
 
     await api.connect({
         autoReconnect: true,
         retries: Infinity,
-        retryInterval: 5,
-        onConnect: () => onConnect(socket, api),
+        retryInterval: 10,
+        onConnect: () => onConnect(socket),
         onException
     });
 });
