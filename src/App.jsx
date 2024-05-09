@@ -1,4 +1,4 @@
-import React, {useCallback, useEffect, useState} from "react";
+import React, {useCallback, useEffect, useMemo, useState} from "react";
 import ReactMarkdown from "react-markdown";
 import {io} from "socket.io-client";
 import {
@@ -40,7 +40,6 @@ const App = (callback, deps) => {
   const [data, setData] = useState([]);
   const [connected, setConnected] = useState(CONNECTION_DISCONNECTED);
   const [socket, setSocket] = useState();
-  const [isReading, setIsReading] = useState(false);
 
   useEffect(() => {
       const socket = io(window.location.host, {forceNew: true});
@@ -55,18 +54,16 @@ const App = (callback, deps) => {
           setConnected(CONNECTION_ERROR);
           console.error(error);
       });
-      socket.on('send data', data => {
-          setData(data);
-          setIsReading(true);
-      });
+      socket.on('send data', setData);
       setSocket(socket);
   }, []);
-
     const doneReading = useCallback(() => {
+        setData([]);
         socket.emit('done reading');
     }, [socket]);
+  const isReading = useMemo(() => data.length > 0, [data]);
 
-    const theme = createTheme({
+  const theme = createTheme({
       palette: {
           mode: 'dark'
       }

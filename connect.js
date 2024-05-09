@@ -61,7 +61,7 @@ const getDataFromLocation = async (location) => {
     console.debug(queries);
 
     // Run each query one at a time
-    const responses = await Promise.all(queries.map(query => {
+    const responses = (await Promise.all(queries.map(query => {
         const url = `${baseUrl}/chat/completions/`;
         const requestBody = {
             provider: 'OpenaiChat',
@@ -70,9 +70,9 @@ const getDataFromLocation = async (location) => {
         };
 
         return axios.post(url, requestBody)
-            .then(response => response.data.choices?.[0]?.message?.content ?? '')
+            .then(response => response?.data?.choices?.[0]?.message?.content ?? null)
             .catch(exception => console.error(exception.message));
-    }));
+    }))).filter(response => response !== undefined);
     console.debug(responses);
 
     return responses;
@@ -84,7 +84,10 @@ const onConnect = socket => {
     console.log('Connected to MSFS SimConnect server.');
 
     // Handle reading toggle
-    socket.on('done reading', () => isReading = false);
+    socket.on('done reading', () => {
+        console.log('No longer reading; find new location of data.');
+        isReading = false;
+    });
 
     const refreshGeolocationDataset = async () => {
         if (isReading) {
@@ -102,12 +105,15 @@ const onConnect = socket => {
             const data = await getDataFromLocation(location);
 
             socket.emit('send data', data);
-            isReading = true;
+
+            if (data.length > 0) {
+                isReading = true;
+            }
         } catch (exception) {
             console.error(exception.message);
         } finally {
             if (isLive) {
-                setTimeout(refreshGeolocationDataset, 60000);
+                setTimeout(refreshGeolocationDataset, 30000);
             }
         }
     }
