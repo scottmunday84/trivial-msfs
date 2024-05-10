@@ -3,6 +3,7 @@ import http from "http";
 import express from "express";
 import {MSFS_API} from "msfs-simconnect-api-wrapper";
 import {Server} from "socket.io";
+import keyword_extractor from "keyword-extractor";
 
 // LocationIQ
 const geoToken = 'pk.59ee0e5aafa88b89c6e1151f8ff0d03d';
@@ -48,7 +49,6 @@ const getDataFromLocation = async (location) => {
         'geography', 'historical events', 'science', 'art', 'authors', 'musicians', 'games', 'sports', 'leisure',
         'famous buildings', 'celebrities', 'pop culture', 'interesting facts'];
     const queries = [
-        `Get the approximate city's name, state or province, township, and country of the city at ${location}.`,
         `Write a detailed summary description of the city at ${location}. Provide as Markdown.`,
         `Get statistics of the city at ${location}. Get population, life expectancy, access of Internet, literacy rate, ` +
         `GDP, ethnic groups, religions, languages,  imports, and exports. Population and GDP should include units. `  +
@@ -70,9 +70,37 @@ const getDataFromLocation = async (location) => {
         };
 
         return axios.post(url, requestBody)
-            .then(response => response?.data?.choices?.[0]?.message?.content ?? null)
+            .then(response => response?.data?.choices?.[0]?.message?.content ?? undefined)
             .catch(exception => console.error(exception.message));
     }))).filter(response => response !== undefined);
+    console.debug(responses);
+
+    return responses;
+}
+const getImagesFromData = async (data) => {
+    const responses = (await Promise.all(data.map(gsrsearch => {
+        const url = 'https://commons.wikimedia.org/w/api.php';
+        const config = {
+            params: {
+                action: 'query',
+                format: 'json',
+                generator: 'search',
+                gsrsearch: keyword_extractor.extract(gsrsearch, {
+                    language: 'english',
+                    remove_digits: true,
+                    remove_duplicates: true
+                }).slice(0, 5).join(' ') + ' filetype:image',
+                gsrnamespace: 6,
+                gsrlimit: 1,
+                prop: 'imageinfo',
+                iiprop: 'url'
+            }
+        };
+
+        return axios.get(url, config)
+            .then(response => Object.values(response?.data?.query?.pages ?? {})?.[0]?.imageinfo?.[0]?.url ?? undefined)
+            .catch(exception => console.error(exception.message));
+    })));
     console.debug(responses);
 
     return responses;
@@ -99,12 +127,14 @@ const onConnect = socket => {
         try {
             const location = await getLocationFromGeolocation();
             console.debug(location);
+            socket.emit('send location', location);
 
             // Get dataset by location
             console.log(`Searching for dataset on ${location}.`);
             const data = await getDataFromLocation(location);
+            const images = await getImagesFromData(data);
+            socket.emit('send data', data, images);
 
-            socket.emit('send data', data);
 
             if (data.length > 0) {
                 isReading = true;
