@@ -60,6 +60,9 @@ const App = (callback, deps) => {
             setConnected(CONNECTION_CONNECTED);
         });
         socket.on('disconnect', () => {
+            setLocation(undefined);
+            setData([]);
+            setImages([]);
             setConnected(CONNECTION_DISCONNECTED);
         });
         socket.on('connect_error', error => {
