@@ -71,7 +71,7 @@ const getDataFromLocation = async (location) => {
             `JSON format should be a list with every fact found: [{"description": "", "title": ""}, ...]`,
             `Title should be an accurate title to the report. Use only proper nouns, dates, and locations specific
             only to the fact report.`,
-            `Find seven facts about the city of ${location} in the following categories of ${categories.join(', ')}. 
+            `Find ten facts about the city of ${location} in the following categories of ${categories.join(', ')}. 
             Write a one page report on each fact. This is the description defined in the JSON format. Do not write 
             duplicate facts. Be as descriptive and specific as possible. Add names, dates, locations, and other 
             identifiable information to the report. Make it interesting.`
