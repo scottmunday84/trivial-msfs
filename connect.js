@@ -3,7 +3,6 @@ import http from "http";
 import express from "express";
 import {MSFS_API} from "msfs-simconnect-api-wrapper";
 import {Server} from "socket.io";
-import keyword_extractor from "keyword-extractor";
 
 // LocationIQ
 const geoToken = 'pk.59ee0e5aafa88b89c6e1151f8ff0d03d';
@@ -45,60 +44,81 @@ const getLocationFromGeolocation = async () => {
     }
 }
 const getDataFromLocation = async (location) => {
-    const categories = [
-        'geography', 'historical events', 'science', 'art', 'authors', 'musicians', 'games', 'sports', 'leisure',
-        'famous buildings', 'celebrities', 'pop culture', 'interesting facts'];
-    const queries = [
-        `Write a detailed summary description of the city at ${location}. Provide as Markdown.`,
-        `Get statistics of the city at ${location}. Get population, life expectancy, access of Internet, literacy rate, ` +
-        `GDP, ethnic groups, religions, languages,  imports, and exports. Population and GDP should include units. `  +
-        `For ethnic groups, religions, languages, imports, and exports, also provide a percentage. Provide as Markdown.`,
-        ...categories.map(category => `Find one to three facts of the city at ${location} in ${category}. ` +
-        `Write descriptions per entry as an essay. Do not write duplicates. Be as descriptive and specific as ` +
-        `possible. No generalities. Add proper names, dates, locations, and other identifiable information to each ` +
-        `description in an essay format. Develop an accurate title to each description using only proper names, ` +
-        `dates, and locations. Provide as Markdown.`)];
-    console.debug(queries);
+    const buildFact = description => ({description, title: `${location} statistics`});
+    const parseJsonFacts = json => JSON.parse(json.replace(/^```json|```$/g, ''));
+    const categories = ['geography', 'history', 'science', 'art', 'authors', 'books', 'music',
+            'musicians', 'games', 'sports', 'leisure', 'famous buildings', 'celebrities', 'pop culture'];
+    const queryGroups = [
+        [
+            parseJsonFacts,
+            `You are an assistant that only provides responses in JSON without surrounding Markdown.`,
+            `JSON format should be: {"description": "", "title": ""}`,
+            `Title should be an accurate title to the description. Use only proper nouns, dates, and locations specific
+            only to the description requested.`,
+            `Write a tourism board brochure of the city at ${location}. This is the description property in the JSON
+            object.`,
+        ],
+        [
+            buildFact,
+            `You are an assistant that only provides Markdown essay responses.`,
+            `Get multiple statistics of the city at ${location}. Get population, life expectancy, access of Internet,
+            literacy rate, GDP, ethnic groups, religions, languages,  imports, and exports. Population and GDP should
+            include units. For ethnic groups, religions, languages, imports, and exports, also provide a percentage.`,
+        ],
+        [
+            parseJsonFacts,
+            `You are an assistant that only provides responses in JSON without surrounding Markdown.`,
+            `JSON format should be a list with every fact found: [{"description": "", "title": ""}, ...]`,
+            `Title should be an accurate title to the report. Use only proper nouns, dates, and locations specific
+            only to the fact report.`,
+            `Find seven facts about the city of ${location} in the following categories of ${categories.join(', ')}. 
+            Write a one page report on each fact. This is the description defined in the JSON format. Do not write 
+            duplicate facts. Be as descriptive and specific as possible. Add names, dates, locations, and other 
+            identifiable information to the report. Make it interesting.`
+        ]
+    ];
+    console.debug(queryGroups);
 
     // Run each query one at a time
-    const responses = (await Promise.all(queries.map(query => {
+    const responses = (await Promise.all(queryGroups.map(queryGroup => {
+        const [parse, ...queries] = queryGroup;
         const url = `${baseUrl}/chat/completions/`;
         const requestBody = {
             provider: 'OpenaiChat',
-            model: 'gpt-3.5-turbo',
-            messages: [{role: 'user', content: query}]
+            model: 'gpt-4-gizmo',
+            messages: queries.map(content => ({role: 'user', content}))
         };
 
         return axios.post(url, requestBody)
-            .then(response => response?.data?.choices?.[0]?.message?.content ?? undefined)
+            .then(response => parse(response?.data?.choices?.[0]?.message?.content ?? undefined))
             .catch(exception => console.error(exception.message));
-    }))).filter(response => response !== undefined);
+    })))
+        .filter(response => response !== undefined)
+        .flatMap(x => x);
     console.debug(responses);
 
     return responses;
 }
-const getImagesFromData = async (data) => {
-    const responses = (await Promise.all(data.map(gsrsearch => {
+const getImagesFromTitles = async (titles) => {
+    const responses = (await Promise.all(titles.map(title => {
         const url = 'https://commons.wikimedia.org/w/api.php';
         const config = {
             params: {
                 action: 'query',
                 format: 'json',
                 generator: 'search',
-                gsrsearch: keyword_extractor.extract(gsrsearch, {
-                    language: 'english',
-                    remove_digits: true,
-                    remove_duplicates: true
-                }).slice(0, 5).join(' ') + ' filetype:image',
+                gsrsearch: `${title} filetype:image`,
                 gsrnamespace: 6,
-                gsrlimit: 1,
+                gsrlimit: 5,
                 prop: 'imageinfo',
                 iiprop: 'url'
             }
         };
 
         return axios.get(url, config)
-            .then(response => Object.values(response?.data?.query?.pages ?? {})?.[0]?.imageinfo?.[0]?.url ?? undefined)
+            .then(response => Object
+                .values(response?.data?.query?.pages ?? {})
+                ?.map(image => image?.imageinfo?.[0]?.url ?? undefined) ?? undefined)
             .catch(exception => console.error(exception.message));
     })));
     console.debug(responses);
@@ -131,12 +151,19 @@ const onConnect = socket => {
 
             // Get dataset by location
             console.log(`Searching for dataset on ${location}.`);
-            const data = await getDataFromLocation(location);
-            const images = await getImagesFromData(data);
-            socket.emit('send data', data, images);
+            const {descriptions, titles} =
+                (await getDataFromLocation(location)).reduce((acc, obj) => {
+                    acc.descriptions.push(obj.description);
+                    acc.titles.push(obj.title);
 
+                    return acc;
+                }, {descriptions: [], titles: []});
+            const images = await getImagesFromTitles(titles);
+            const facts = descriptions.map((description, index) =>
+                ({description, images: images[index]}));
+            socket.emit('send facts', facts);
 
-            if (data.length > 0) {
+            if (facts.length > 0) {
                 isReading = true;
             }
         } catch (exception) {

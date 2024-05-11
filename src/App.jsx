@@ -6,14 +6,12 @@ import {
     BottomNavigation,
     Box,
     Card,
-    CardActionArea,
-    CardContent,
-    CardMedia,
     Container,
     createTheme,
     CssBaseline,
     Fade,
     Grow,
+    lighten,
     List,
     ListItem,
     Paper,
@@ -25,6 +23,10 @@ import {
 } from "@mui/material";
 import {FlightTakeoff, Power, PowerOff, RunningWithErrors} from "@mui/icons-material";
 import "./App.css";
+
+const CONNECTION_CONNECTED = 0;
+const CONNECTION_DISCONNECTED = 1;
+const CONNECTION_ERROR = -1;
 
 const ConnectedIcon = ({connected}) => {
     if (connected === CONNECTION_CONNECTED) {
@@ -42,16 +44,39 @@ const ConnectedIcon = ({connected}) => {
     return null;
 }
 
-const CONNECTION_CONNECTED = 0;
-const CONNECTION_DISCONNECTED = 1;
-const CONNECTION_ERROR = -1;
+const FactItem = ({description, images}) => {
+    const width = 300;
+
+    return (
+        <Card sx={{width: '100%'}}>
+            <Stack direction="row">
+                <Typography variant="body1" sx={{padding: 2, flex: '1'}}>
+                    <ReactMarkdown>{description}</ReactMarkdown>
+                </Typography>
+                {images.length > 0 && (
+                    <Paper sx={{padding: 1, backgroundColor: theme => lighten(theme.palette.background.default, 0.05)}}>
+                        <Stack direction="row" gap={1} alignItems="flex-start"
+                               alignContent="flex-start" flexWrap="wrap" sx={{width: `${width * 2 + 8}px`}}>
+                            {images.map((url, index) => (
+                                <Fade key={index} in timeout={2000}>
+                                    <img alt="..."
+                                         src={url}
+                                         style={{width, objectFit: 'contain'}} />
+                                </Fade>
+                            ))}
+                        </Stack>
+                    </Paper>)}
+            </Stack>
+        </Card>);
+}
 
 const App = (callback, deps) => {
-    const [location, setLocation] = useState();
-    const [data, setData] = useState([]);
-    const [images, setImages] = useState([]);
     const [connected, setConnected] = useState(CONNECTION_DISCONNECTED);
-    const [socket, setSocket] = useState();
+    const [socket, setSocket] = useState(null);
+
+    // Facts
+    const [location, setLocation] = useState(null);
+    const [facts, setFacts] = useState([]);
 
     useEffect(() => {
         const socket = io(window.location.host, {forceNew: true});
@@ -60,9 +85,8 @@ const App = (callback, deps) => {
             setConnected(CONNECTION_CONNECTED);
         });
         socket.on('disconnect', () => {
-            setLocation(undefined);
-            setData([]);
-            setImages([]);
+            setLocation(null);
+            setFacts([]);
             setConnected(CONNECTION_DISCONNECTED);
         });
         socket.on('connect_error', error => {
@@ -70,20 +94,16 @@ const App = (callback, deps) => {
             console.error(error);
         });
         socket.on('send location', setLocation);
-        socket.on('send data', (data, images) => {
-            setData(data);
-            setImages(images);
-        });
+        socket.on('send facts', setFacts);
         setSocket(socket);
     }, []);
     const doneReading = useCallback(() => {
-        setLocation(undefined);
-        setData([]);
-        setImages([]);
+        setLocation(null);
+        setFacts([]);
         socket.emit('done reading');
     }, [socket]);
-    const hasLocation = useMemo(() => location !== undefined, [location]);
-    const isReading = useMemo(() => data.length > 0, [data]);
+    const hasLocation = useMemo(() => location !== null, [location]);
+    const isReading = useMemo(() => facts.length > 0, [facts]);
 
     const theme = createTheme({
         palette: {
@@ -112,8 +132,7 @@ const App = (callback, deps) => {
                                     letterSpacing: '.3rem',
                                     color: 'inherit',
                                     textDecoration: 'none',
-                                }}
-                            >
+                                }}>
                                 {location}
                             </Typography>
                         </Fade>
@@ -122,19 +141,10 @@ const App = (callback, deps) => {
             </AppBar>
             <Stack gap={2} alignItems="flex-end" sx={{padding: '10px'}}>
                 <List sx={{width: '100%', padding: 8}}>
-                    {data.map((input, key) => (
+                    {facts.map(({description, images}, key) => (
                         <ListItem key={key}>
-                            <Grow in={true} timeout={3000}>
-                                <Card sx={{width: '100%'}}>
-                                    <CardActionArea>
-                                        {images?.[key] && (<CardMedia component="img" height="140" image={images?.[key]} />)}
-                                        <CardContent>
-                                            <Typography variant="body2" sx={{padding: 2}}>
-                                                <ReactMarkdown>{input}</ReactMarkdown>
-                                            </Typography>
-                                        </CardContent>
-                                    </CardActionArea>
-                                </Card>
+                            <Grow timeout={3000}>
+                                <FactItem description={description} images={images} />
                             </Grow>
                         </ListItem>
                     ))}
@@ -144,7 +154,7 @@ const App = (callback, deps) => {
                         <Box sx={{padding: '5px'}}>
                             <ConnectedIcon connected={connected}/>
                         </Box>
-                        <Grow in={connected === CONNECTION_CONNECTED && isReading} timeout={3000}>
+                        <Grow in={connected === CONNECTION_CONNECTED && isReading} timeout={3000} unmountOnExit>
                             <Box sx={{padding: '5px'}}>
                                 <Switch onChange={doneReading} checked label="Reading"/>
                             </Box>
