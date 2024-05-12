@@ -11,11 +11,8 @@ const geoUrl = 'https://us1.locationiq.com/v1';
 // OpenAI (free) setup
 const baseUrl = 'http://localhost:1337/v1';
 
-// Run the MSFS API
-const api = new MSFS_API();
-
 // Setting up functions used to perform actions
-const getLocationFromGeolocation = async () => {
+const getLocationFromGeolocation = async (api) => {
     const radiansToDegrees = radians => radians * (180 / Math.PI);
 
     while (true) {
@@ -71,10 +68,10 @@ const getDataFromLocation = async (location) => {
             `JSON format should be a list with every fact found: [{"description": "", "title": ""}, ...]`,
             `Title should be an accurate title to the report. Use only proper nouns, dates, and locations specific
             only to the fact report.`,
-            `Find ten facts about the city of ${location} in the following categories of ${categories.join(', ')}. 
-            Write a one page report on each fact. This is the description defined in the JSON format. Do not write 
-            duplicate facts. Be as descriptive and specific as possible. Add names, dates, locations, and other 
-            identifiable information to the report. Make it interesting.`
+            `Find ten facts about the city of ${location} in the following categories of ${categories.join(', ')} and 
+            write it as a full page report. This is the description defined in the JSON format. Do not write duplicate 
+            facts. Be as descriptive and specific as possible. Add names, dates, and locations to the report. Make 
+            it interesting.`
         ]
     ];
     console.debug(queryGroups);
@@ -126,7 +123,7 @@ const getImagesFromTitles = async (titles) => {
     return responses;
 }
 
-const onConnect = socket => {
+const onConnect = (socket, api) => {
     let isReading = false;
     let isLive = true;
     console.log('Connected to MSFS SimConnect server.');
@@ -145,7 +142,7 @@ const onConnect = socket => {
         }
 
         try {
-            const location = await getLocationFromGeolocation();
+            const location = await getLocationFromGeolocation(api);
             console.debug(location);
             socket.emit('send location', location);
 
@@ -193,11 +190,14 @@ app.use(express.static('build'));
 io.on('connection', async (socket) => {
     console.log('A flyer connected. Zoom, zoom!!');
 
+    // Run the MSFS API
+    const api = new MSFS_API();
+
     await api.connect({
         autoReconnect: true,
         retries: Infinity,
         retryInterval: 10,
-        onConnect: () => onConnect(socket),
+        onConnect: () => onConnect(socket, api),
         onException
     });
 });
